@@ -5,50 +5,50 @@ from core.core.database import Base
 
 class Grid(Base):
     """
-    Bảng quản lý lưới (grid) - lưu thông tin về kích thước và cấu hình lưới
+    Grid management table - stores grid size and configuration
     """
     __tablename__ = "grids"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False, comment="Tên lưới")
-    width = Column(Integer, nullable=False, comment="Chiều rộng lưới")
-    height = Column(Integer, nullable=False, comment="Chiều cao lưới")
-    total_cells = Column(Integer, nullable=False, comment="Tổng số ô (width * height)")
+    name = Column(String(100), nullable=False, comment="Grid name")
+    width = Column(Integer, nullable=False, comment="Grid width")
+    height = Column(Integer, nullable=False, comment="Grid height")
+    total_cells = Column(Integer, nullable=False, comment="Total cells (width * height)")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    is_active = Column(Boolean, default=True, comment="Trạng thái hoạt động")
+    is_active = Column(Boolean, default=True, comment="Active status")
     
     # Relationship
     cells = relationship("GridCell", back_populates="grid", cascade="all, delete-orphan")
 
 class GridCell(Base):
     """
-    Bảng quản lý từng ô trong lưới
+    Cell management table - each cell in the grid
     """
     __tablename__ = "grid_cells"
     
     id = Column(Integer, primary_key=True, index=True)
     grid_id = Column(Integer, ForeignKey("grids.id"), nullable=False)
-    position_x = Column(Integer, nullable=False, comment="Vị trí X trong lưới (0-based)")
-    position_y = Column(Integer, nullable=False, comment="Vị trí Y trong lưới (0-based)")
-    cell_name = Column(String(50), nullable=False, comment="Tên ô (ví dụ: A1, B2)")
+    position_x = Column(Integer, nullable=False, comment="X position in grid (0-based)")
+    position_y = Column(Integer, nullable=False, comment="Y position in grid (0-based)")
+    cell_name = Column(String(50), nullable=False, comment="Cell name (e.g: A1, B2)")
     
-    # Thông tin đơn hàng hiện tại
-    current_order_code = Column(String(100), nullable=True, comment="Mã đơn hàng hiện tại (VA-M-000126)")
-    current_order_date = Column(String(10), nullable=True, comment="Ngày đơn hàng hiện tại (101725)")
-    current_full_order_key = Column(String(120), nullable=True, comment="Key đầy đủ: order_code-order_date")
-    current_product_count = Column(Integer, default=0, comment="Số sản phẩm hiện tại trong ô")
-    target_product_count = Column(Integer, nullable=True, comment="Tổng số sản phẩm cần có trong đơn hàng")
+    # Current order information
+    current_order_code = Column(String(100), nullable=True, comment="Current order code (VA-M-000126)")
+    current_order_date = Column(String(10), nullable=True, comment="Current order date (101725)")
+    current_full_order_key = Column(String(120), nullable=True, comment="Full key: order_code-order_date")
+    current_product_count = Column(Integer, default=0, comment="Current product count in cell")
+    target_product_count = Column(Integer, nullable=True, comment="Total products needed for order")
     
-    # Trạng thái ô
-    status = Column(String(20), default="empty", comment="Trạng thái: empty, filling, full")
-    note = Column(Text, nullable=True, comment="Ghi chú cho ô")
+    # Cell status
+    status = Column(String(20), default="empty", comment="Status: empty, filling, full")
+    note = Column(Text, nullable=True, comment="Cell note")
     
-    # Thời gian
+    # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    filled_at = Column(DateTime, nullable=True, comment="Thời gian ô được đầy")
-    cleared_at = Column(DateTime, nullable=True, comment="Thời gian ô được giải phóng")
+    filled_at = Column(DateTime, nullable=True, comment="Time when cell was filled")
+    cleared_at = Column(DateTime, nullable=True, comment="Time when cell was cleared")
     
     # Unique constraint cho vị trí trong grid
     __table_args__ = (UniqueConstraint('grid_id', 'position_x', 'position_y', name='unique_cell_position'),)
@@ -61,29 +61,29 @@ class GridCell(Base):
 
 class Product(Base):
     """
-    Bảng lưu thông tin chi tiết từng sản phẩm trong ô
+    Product details table - each product in a cell
     """
     __tablename__ = "products"
     
     id = Column(Integer, primary_key=True, index=True)
     cell_id = Column(Integer, ForeignKey("grid_cells.id"), nullable=False)
     
-    # Thông tin sản phẩm từ FE
-    product_code = Column(String(100), nullable=False, unique=True, comment="Mã sản phẩm: VA-M-000126-2 (UNIQUE)")
-    size = Column(String(10), nullable=False, comment="Kích thước: S, M, L, XL")
-    color = Column(String(50), nullable=False, comment="Màu sắc")
-    qr_data = Column(String(200), nullable=False, comment="Dữ liệu QR: 101725-VA-M-000126-2")
-    number = Column(Integer, nullable=False, comment="Số thứ tự sản phẩm trong đơn hàng")
-    total = Column(Integer, nullable=False, comment="Tổng số sản phẩm trong đơn hàng")
+    # Product information from FE
+    product_code = Column(String(100), nullable=False, unique=True, comment="Product code: VA-M-000126-2 (UNIQUE)")
+    size = Column(String(10), nullable=False, comment="Size: S, M, L, XL")
+    color = Column(String(50), nullable=False, comment="Color")
+    qr_data = Column(String(200), nullable=False, comment="QR data: 101725-VA-M-000126-2")
+    number = Column(Integer, nullable=False, comment="Product sequence number in order")
+    total = Column(Integer, nullable=False, comment="Total products in order")
     
-    # Thông tin phân tích từ product_code
-    production_area = Column(String(10), nullable=False, comment="Khu sản xuất: VA")
-    size_code = Column(String(5), nullable=False, comment="Mã size: M")
-    order_number = Column(String(20), nullable=False, comment="Mã đơn hàng: 000126")
-    product_number = Column(Integer, nullable=False, comment="Số sản phẩm: 2")
+    # Parsed information from product_code
+    production_area = Column(String(10), nullable=False, comment="Production area: VA")
+    size_code = Column(String(5), nullable=False, comment="Size code: M")
+    order_number = Column(String(20), nullable=False, comment="Order number: 000126")
+    product_number = Column(Integer, nullable=False, comment="Product number: 2")
     
-    # Thông tin thời gian từ qr_data
-    order_date = Column(String(10), nullable=False, comment="Ngày đơn hàng: 101725")
+    # Time information from qr_data
+    order_date = Column(String(10), nullable=False, comment="Order date: 101725")
     
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -92,62 +92,62 @@ class Product(Base):
 
 class CellHistory(Base):
     """
-    Bảng lưu TẤT CẢ lịch sử hoạt động của ô
-    - Thêm sản phẩm
-    - Đổi trạng thái
-    - Cập nhật ghi chú
-    - Giải phóng ô
+    Cell history table - ALL cell activities
+    - Product added
+    - Status changed
+    - Note updated
+    - Cell cleared
     """
     __tablename__ = "cell_histories"
     
     id = Column(Integer, primary_key=True, index=True)
     cell_id = Column(Integer, ForeignKey("grid_cells.id"), nullable=False)
     
-    # Loại hành động
-    action_type = Column(String(50), nullable=False, comment="Loại: product_added, status_changed, note_updated, cell_cleared")
-    description = Column(Text, nullable=False, comment="Mô tả chi tiết")
+    # Action type
+    action_type = Column(String(50), nullable=False, comment="Type: product_added, status_changed, note_updated, cell_cleared")
+    description = Column(Text, nullable=False, comment="Detailed description")
     
-    # Thông tin đơn hàng (nếu có)
-    order_code = Column(String(100), nullable=True, comment="Mã đơn hàng liên quan")
-    order_date = Column(String(10), nullable=True, comment="Ngày đơn hàng")
+    # Order information (if any)
+    order_code = Column(String(100), nullable=True, comment="Related order code")
+    order_date = Column(String(10), nullable=True, comment="Order date")
     
-    # Dữ liệu cũ và mới (JSON)
-    old_data = Column(Text, nullable=True, comment="Dữ liệu trước khi thay đổi (JSON)")
-    new_data = Column(Text, nullable=True, comment="Dữ liệu sau khi thay đổi (JSON)")
+    # Old and new data (JSON)
+    old_data = Column(Text, nullable=True, comment="Data before change (JSON)")
+    new_data = Column(Text, nullable=True, comment="Data after change (JSON)")
     
-    # Thông tin thêm cho action cell_cleared
-    products_data = Column(Text, nullable=True, comment="JSON data của sản phẩm khi clear")
-    product_count = Column(Integer, nullable=True, comment="Số sản phẩm khi clear")
+    # Additional info for cell_cleared action
+    products_data = Column(Text, nullable=True, comment="Product JSON data when cleared")
+    product_count = Column(Integer, nullable=True, comment="Product count when cleared")
     
-    # Người thực hiện
-    performed_by = Column(String(100), default="system", comment="Người thực hiện")
+    # Performer
+    performed_by = Column(String(100), default="system", comment="Performed by")
     
-    # Thời gian
-    created_at = Column(DateTime, default=datetime.utcnow, comment="Thời gian thực hiện")
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, comment="Action timestamp")
     
     # Relationships
     cell = relationship("GridCell", back_populates="histories")
 
 class OrderTracking(Base):
     """
-    Bảng theo dõi trạng thái đơn hàng
+    Order tracking table - order status tracking
     """
     __tablename__ = "order_tracking"
     
     id = Column(Integer, primary_key=True, index=True)
-    order_code = Column(String(100), nullable=False, comment="Mã đơn hàng: VA-M-000126")
-    order_date = Column(String(10), nullable=False, comment="Ngày đơn hàng: 101725")
-    full_order_key = Column(String(120), nullable=False, unique=True, comment="Key đầy đủ: order_code-order_date")
-    total_products = Column(Integer, nullable=False, comment="Tổng số sản phẩm trong đơn hàng")
-    received_products = Column(Integer, default=0, comment="Số sản phẩm đã nhận")
-    assigned_cell_id = Column(Integer, ForeignKey("grid_cells.id"), nullable=True, comment="Ô được phân bổ")
+    order_code = Column(String(100), nullable=False, comment="Order code: VA-M-000126")
+    order_date = Column(String(10), nullable=False, comment="Order date: 101725")
+    full_order_key = Column(String(120), nullable=False, unique=True, comment="Full key: order_code-order_date")
+    total_products = Column(Integer, nullable=False, comment="Total products in order")
+    received_products = Column(Integer, default=0, comment="Received products count")
+    assigned_cell_id = Column(Integer, ForeignKey("grid_cells.id"), nullable=True, comment="Assigned cell")
     
-    status = Column(String(20), default="pending", comment="Trạng thái: pending, filling, completed, shipped")
+    status = Column(String(20), default="pending", comment="Status: pending, filling, completed, shipped")
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True, comment="Thời gian hoàn thành đơn hàng")
-    shipped_at = Column(DateTime, nullable=True, comment="Thời gian giao hàng")
+    completed_at = Column(DateTime, nullable=True, comment="Order completion time")
+    shipped_at = Column(DateTime, nullable=True, comment="Shipping time")
     
     # Relationships
     assigned_cell = relationship("GridCell", back_populates="order_tracking")

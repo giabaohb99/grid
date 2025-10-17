@@ -8,7 +8,7 @@ from . import models, schemas
 
 def parse_product_code(product_code: str) -> dict:
     """
-    Phân tích product_code: VA-M-000126-2
+    Parse product_code: VA-M-000126-2
     """
     parts = product_code.split('-')
     if len(parts) != 4:
@@ -23,7 +23,7 @@ def parse_product_code(product_code: str) -> dict:
 
 def parse_qr_data(qr_data: str) -> dict:
     """
-    Phân tích qr_data: 101725-VA-M-000126-2
+    Parse qr_data: 101725-VA-M-000126-2
     """
     parts = qr_data.split('-', 1)
     if len(parts) != 2:
@@ -36,15 +36,15 @@ def parse_qr_data(qr_data: str) -> dict:
 
 def extract_order_code(product_code: str) -> str:
     """
-    Trích xuất order code từ product_code: VA-M-000126-2 -> VA-M-000126
+    Extract order code from product_code: VA-M-000126-2 -> VA-M-000126
     """
     parts = product_code.split('-')
     return f"{parts[0]}-{parts[1]}-{parts[2]}"
 
 def create_full_order_key(order_code: str, order_date: str) -> str:
     """
-    Tạo key đầy đủ cho đơn hàng: order_code + order_date
-    VD: VA-M-000126 + 101725 -> VA-M-000126-101725
+    Create full order key: order_code + order_date
+    Example: VA-M-000126 + 101725 -> VA-M-000126-101725
     """
     return f"{order_code}-{order_date}"
 
@@ -62,13 +62,13 @@ def log_cell_history(
     performed_by: str = "system"
 ):
     """
-    Ghi lại MỌI hoạt động vào cell_histories
+    Log ALL activities to cell_histories
     
     action_type:
-    - product_added: Thêm sản phẩm
-    - status_changed: Đổi trạng thái
-    - note_updated: Cập nhật ghi chú
-    - cell_cleared: Giải phóng ô (giao hàng)
+    - product_added: Product added
+    - status_changed: Status changed
+    - note_updated: Note updated
+    - cell_cleared: Cell cleared (shipped)
     """
     history = models.CellHistory(
         cell_id=cell_id,
@@ -83,11 +83,11 @@ def log_cell_history(
         performed_by=performed_by
     )
     db.add(history)
-    # Không commit ở đây - transaction chính sẽ commit
+    # Don't commit here - main transaction will commit
 
 # Grid CRUD
 def create_grid(db: Session, grid: schemas.GridCreate) -> models.Grid:
-    """Tạo lưới mới và tự động tạo các ô"""
+    """Create new grid and auto-generate cells"""
     db_grid = models.Grid(
         name=grid.name,
         width=grid.width,
@@ -95,9 +95,9 @@ def create_grid(db: Session, grid: schemas.GridCreate) -> models.Grid:
         total_cells=grid.width * grid.height
     )
     db.add(db_grid)
-    db.flush()  # Để có grid.id
+    db.flush()  # To get grid.id
     
-    # Tạo các ô tự động
+    # Auto-generate cells
     cells = []
     for y in range(grid.height):
         for x in range(grid.width):
@@ -118,40 +118,40 @@ def create_grid(db: Session, grid: schemas.GridCreate) -> models.Grid:
     return db_grid
 
 def get_grid(db: Session, grid_id: int) -> Optional[models.Grid]:
-    """Lấy thông tin lưới theo ID"""
+    """Get grid by ID"""
     return db.query(models.Grid).filter(models.Grid.id == grid_id).first()
 
 def get_grids(db: Session, skip: int = 0, limit: int = 100) -> List[models.Grid]:
-    """Lấy danh sách lưới"""
+    """Get list of grids"""
     return db.query(models.Grid).filter(models.Grid.is_active == True).offset(skip).limit(limit).all()
 
 def get_grid_with_cells(db: Session, grid_id: int) -> Optional[models.Grid]:
-    """Lấy lưới kèm tất cả ô và sản phẩm"""
+    """Get grid with all cells and products"""
     return db.query(models.Grid).filter(models.Grid.id == grid_id).first()
 
 def update_grid(db: Session, grid_id: int, grid_update: schemas.GridUpdate) -> dict:
     """
-    Cập nhật grid (tên hoặc kích thước)
-    - Nếu thay đổi kích thước: tạo thêm cells mới hoặc xóa cells (nếu không có sản phẩm)
+    Update grid (name or size)
+    - If size changed: create new cells or delete cells (if no products)
     """
     grid = db.query(models.Grid).filter(models.Grid.id == grid_id).first()
     if not grid:
-        return {"success": False, "message": "Không tìm thấy lưới"}
+        return {"success": False, "message": "Grid not found"}
     
-    # Cập nhật tên nếu có
+    # Update name if provided
     if grid_update.name is not None:
         grid.name = grid_update.name
     
-    # Cập nhật kích thước nếu có
+    # Update size if provided
     if grid_update.width is not None or grid_update.height is not None:
         new_width = grid_update.width if grid_update.width is not None else grid.width
         new_height = grid_update.height if grid_update.height is not None else grid.height
         old_width = grid.width
         old_height = grid.height
         
-        # Kiểm tra nếu giảm kích thước
+        # Check if reducing size
         if new_width < old_width or new_height < old_height:
-            # Lấy các cells sẽ bị xóa
+            # Get cells to be deleted
             cells_to_delete = db.query(models.GridCell).filter(
                 and_(
                     models.GridCell.grid_id == grid_id,
@@ -159,21 +159,21 @@ def update_grid(db: Session, grid_id: int, grid_update: schemas.GridUpdate) -> d
                 )
             ).all()
             
-            # Kiểm tra cells có sản phẩm không
+            # Check if cells have products
             cells_with_products = [cell for cell in cells_to_delete if cell.current_product_count > 0]
             if cells_with_products:
                 cell_names = ", ".join([cell.cell_name for cell in cells_with_products])
                 return {
                     "success": False,
-                    "message": f"Không thể giảm kích thước. Các ô sau đây đang có sản phẩm: {cell_names}",
+                    "message": f"Cannot reduce size. These cells have products: {cell_names}",
                     "cells_with_products": [cell.cell_name for cell in cells_with_products]
                 }
             
-            # Xóa các cells không có sản phẩm
+            # Delete cells without products
             for cell in cells_to_delete:
                 db.delete(cell)
         
-        # Nếu tăng kích thước - tạo thêm cells mới
+        # If increasing size - create new cells
         if new_width > old_width or new_height > old_height:
             existing_cells = {(cell.position_x, cell.position_y) for cell in grid.cells}
             new_cells = []
@@ -195,7 +195,7 @@ def update_grid(db: Session, grid_id: int, grid_update: schemas.GridUpdate) -> d
             if new_cells:
                 db.add_all(new_cells)
         
-        # Cập nhật thông tin grid
+        # Update grid info
         grid.width = new_width
         grid.height = new_height
         grid.total_cells = new_width * new_height
@@ -206,7 +206,7 @@ def update_grid(db: Session, grid_id: int, grid_update: schemas.GridUpdate) -> d
     
     return {
         "success": True,
-        "message": "Đã cập nhật lưới thành công",
+        "message": "Grid updated successfully",
         "grid": grid
     }
 

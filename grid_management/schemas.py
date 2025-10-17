@@ -2,25 +2,25 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
-# Product Input Schema (từ FE)
+# Product Input Schema (from FE)
 class ProductInput(BaseModel):
-    productCode: str = Field(..., description="Mã sản phẩm: VA-M-000126-2")
-    size: str = Field(..., description="Kích thước")
-    color: str = Field(..., description="Màu sắc")
-    qrData: str = Field(..., description="Dữ liệu QR: 101725-VA-M-000126-2")
-    number: str = Field(..., description="Số thứ tự sản phẩm")
-    total: str = Field(..., description="Tổng số sản phẩm")
+    productCode: str = Field(..., description="Product code: VA-M-000126-2")
+    size: str = Field(..., description="Size")
+    color: str = Field(..., description="Color")
+    qrData: str = Field(..., description="QR data: 101725-VA-M-000126-2")
+    number: str = Field(..., description="Product sequence number")
+    total: str = Field(..., description="Total products")
 
 # Grid Schemas
 class GridCreate(BaseModel):
-    name: str = Field(..., description="Tên lưới")
-    width: int = Field(..., gt=0, le=20, description="Chiều rộng lưới (1-20)")
-    height: int = Field(..., gt=0, le=20, description="Chiều cao lưới (1-20)")
+    name: str = Field(..., description="Grid name")
+    width: int = Field(..., gt=0, le=20, description="Grid width (1-20)")
+    height: int = Field(..., gt=0, le=20, description="Grid height (1-20)")
 
 class GridUpdate(BaseModel):
-    name: Optional[str] = Field(None, description="Tên lưới mới")
-    width: Optional[int] = Field(None, gt=0, le=20, description="Chiều rộng mới (1-20)")
-    height: Optional[int] = Field(None, gt=0, le=20, description="Chiều cao mới (1-20)")
+    name: Optional[str] = Field(None, description="New grid name")
+    width: Optional[int] = Field(None, gt=0, le=20, description="New width (1-20)")
+    height: Optional[int] = Field(None, gt=0, le=20, description="New height (1-20)")
 
 class GridResponse(BaseModel):
     id: int
@@ -90,10 +90,10 @@ class GridWithCellsResponse(BaseModel):
 
 # Cell Update Schemas
 class CellNoteUpdate(BaseModel):
-    note: Optional[str] = Field(None, description="Ghi chú cho ô")
+    note: Optional[str] = Field(None, description="Cell note")
 
 class CellStatusUpdate(BaseModel):
-    status: str = Field(..., description="Trạng thái: empty, filling, full")
+    status: str = Field(..., description="Status: empty, filling, full")
 
 # Order Tracking Schemas
 class OrderTrackingResponse(BaseModel):
