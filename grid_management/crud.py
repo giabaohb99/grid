@@ -225,7 +225,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
         if check_product_exists(db, product_input.productCode):
             return {
                 "success": False,
-                "message": f"Sản phẩm {product_input.productCode} đã tồn tại trong hệ thống",
+                "message": f"Product {product_input.productCode} already exists in the system",
                 "duplicate": True
             }
         
@@ -241,7 +241,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
         if not active_grid:
             return {
                 "success": False,
-                "message": "Không có lưới nào đang hoạt động trong hệ thống"
+                "message": "No active grid found in the system"
             }
         
         # Tìm ô đang filling cùng full_order_key (order_code + order_date) trong tất cả grid active
@@ -268,7 +268,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
             if not target_cell:
                 return {
                     "success": False,
-                    "message": "Không có ô trống trong tất cả lưới để phân bổ sản phẩm"
+                    "message": "No empty cells available in all grids to assign product"
                 }
             
             target_grid = target_cell.grid
@@ -300,7 +300,10 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
         target_cell.current_order_date = order_date
         target_cell.current_full_order_key = full_order_key
         target_cell.current_product_count = (target_cell.current_product_count or 0) + 1
-        target_cell.target_product_count = int(product_input.total)
+        if target_cell.target_product_count is None:
+            target_cell.target_product_count =  int(product_input.total)
+        else:
+            target_cell.target_product_count =  target_cell.target_product_count +  int(product_input.total)
         target_cell.updated_at = datetime.utcnow()
         
         # Cập nhật trạng thái ô
@@ -315,7 +318,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
             db=db,
             cell_id=target_cell.id,
             action_type="product_added",
-            description=f"Thêm sản phẩm {product_input.productCode} ({product_input.size}/{product_input.color}) vào ô {target_cell.cell_name}",
+            description=f"Added product {product_input.productCode} ({product_input.size}/{product_input.color}) to cell {target_cell.cell_name}",
             order_code=order_code,
             order_date=order_date,
             new_data={
@@ -333,7 +336,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
                 db=db,
                 cell_id=target_cell.id,
                 action_type="status_changed",
-                description=f"Ô {target_cell.cell_name} đổi từ '{old_status}' → '{target_cell.status}' (tự động)",
+                description=f"Cell {target_cell.cell_name} changed from '{old_status}' → '{target_cell.status}' (automatic)",
                 order_code=order_code,
                 order_date=order_date,
                 old_data={"status": old_status, "count": old_count},
@@ -368,7 +371,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
         
         return {
             "success": True,
-            "message": f"Đã phân bổ sản phẩm vào ô {target_cell.cell_name} trong lưới {target_grid.name}",
+            "message": f"Successfully assigned product to cell {target_cell.cell_name} in grid {target_grid.name}",
             "grid_id": target_grid.id,
             "grid_name": target_grid.name,
             "cell_id": target_cell.id,
@@ -391,7 +394,7 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
         db.rollback()
         return {
             "success": False,
-            "message": f"Lỗi khi phân bổ sản phẩm: {str(e)}"
+            "message": f"Error assigning product: {str(e)}"
         }
 
 # Cell CRUD
@@ -410,7 +413,7 @@ def update_cell_note(db: Session, cell_id: int, note: Optional[str]) -> bool:
         db=db,
         cell_id=cell_id,
         action_type="note_updated",
-        description=f"Cập nhật ghi chú cho ô {cell.cell_name}",
+        description=f"Updated note for cell {cell.cell_name}",
         order_code=cell.current_order_code,
         order_date=cell.current_order_date,
         old_data={"note": old_note},
@@ -451,7 +454,7 @@ def clear_cell(db: Session, cell_id: int) -> bool:
                 db=db,
                 cell_id=cell_id,
                 action_type="cell_cleared",
-                description=f"Giải phóng ô {cell.cell_name} - Giao đơn hàng {cell.current_order_code}",
+                description=f"Released cell {cell.cell_name} - Shipped order {cell.current_order_code}",
                 order_code=cell.current_order_code,
                 order_date=cell.current_order_date,
                 old_data={
@@ -521,8 +524,15 @@ def get_grid_status(db: Session, grid_id: int) -> Optional[dict]:
         "cells": grid.cells
     }
 
-def get_cell_histories(db: Session, cell_id: int) -> List[models.CellHistory]:
+def get_cell_histories(db: Session, cell_id: int, skip: int = 0, limit: int = 10, action_type: str = None, order_code: str = None, order_date: str = None) -> List[models.CellHistory]:
     """Lấy lịch sử của ô"""
-    return db.query(models.CellHistory).filter(
+    histories = db.query(models.CellHistory).filter(
         models.CellHistory.cell_id == cell_id
-    ).order_by(models.CellHistory.cleared_at.desc()).all()
+    ).filter(
+        models.CellHistory.action_type == action_type
+    ).filter(
+        models.CellHistory.order_code == order_code
+    ).filter(
+        models.CellHistory.order_date == order_date
+    ).order_by(models.CellHistory.created_at.desc()).offset(skip).limit(limit).all()
+    return histories

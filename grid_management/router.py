@@ -6,7 +6,7 @@ from core.core.database import get_db
 from . import crud, schemas, models
 
 router = APIRouter(
-    prefix="/api/grid",
+    prefix="/api",
     tags=["Grid Management - Public API"]
 )
 
@@ -27,20 +27,28 @@ def create_grid(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Không thể tạo lưới: {str(e)}"
+            detail=f"Failed to create grid: {str(e)}"
         )
 
-@router.get("/list", response_model=List[schemas.GridResponse])
+@router.get("/grids", response_model=schemas.PaginationResponse[schemas.GridResponse])
 def get_grids(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = 1,
+    limit: int = 10,
     db: Session = Depends(get_db)
 ):
     """Lấy danh sách tất cả lưới"""
-    grids = crud.get_grids(db=db, skip=skip, limit=limit)
-    return grids
+    data = crud.get_grids(db=db, skip=(page - 1) * limit, limit=limit)
+    paginationData = schemas.PaginationResponse(
+        page=page,
+        limit=limit,
+        total=len(data),
+        data=data,  
+    )
+    print(paginationData)
+    
+    return paginationData
 
-@router.get("/{grid_id}", response_model=schemas.GridWithCellsResponse)
+@router.get("/grid/{grid_id}", response_model=schemas.GridWithCellsResponse)
 def get_grid_detail(
     grid_id: int,
     db: Session = Depends(get_db)
@@ -53,11 +61,11 @@ def get_grid_detail(
     if not grid:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy lưới"
+            detail="Grid not found"
         )
     return grid
 
-@router.put("/{grid_id}", response_model=schemas.GridResponse)
+@router.put("/grid/{grid_id}", response_model=schemas.GridResponse)
 def update_grid(
     grid_id: int,
     grid_update: schemas.GridUpdate,
@@ -89,7 +97,7 @@ def update_grid(
 
 # Product Assignment Endpoints
 
-@router.post("/assign-product", response_model=schemas.ProductAssignmentResponse)
+@router.post("/grid/assign-product", response_model=schemas.ProductAssignmentResponse)
 def assign_product(
     product: schemas.ProductInput,
     db: Session = Depends(get_db)
@@ -118,7 +126,7 @@ def assign_product(
     
     return result
 
-@router.get("/product/{product_code}/check")
+@router.get("/grid/product/{product_code}/check")
 def check_product_duplicate(
     product_code: str,
     db: Session = Depends(get_db)
@@ -128,12 +136,12 @@ def check_product_duplicate(
     return {
         "product_code": product_code,
         "exists": exists,
-        "message": "Sản phẩm đã tồn tại" if exists else "Sản phẩm chưa tồn tại"
+        "message": "Product already exists" if exists else "Product does not exist"
     }
 
 # Cell Management Endpoints
 
-@router.get("/cells/ready-to-ship", response_model=List[schemas.GridCellResponse])
+@router.get("/grid/cells/ready-to-ship", response_model=List[schemas.GridCellResponse])
 def get_cells_ready_to_ship(
     db: Session = Depends(get_db)
 ):
@@ -154,7 +162,7 @@ def get_cells_ready_to_ship(
     
     return cells
 
-@router.get("/cells/by-status/{status}", response_model=List[schemas.GridCellResponse])
+@router.get("/grid/cells/by-status/{status}", response_model=List[schemas.GridCellResponse])
 def get_cells_by_status(
     status: str,
     db: Session = Depends(get_db)
@@ -171,7 +179,7 @@ def get_cells_by_status(
     if status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Trạng thái không hợp lệ. Chỉ chấp nhận: {', '.join(valid_statuses)}"
+            detail=f"Invalid status. Only accepts: {', '.join(valid_statuses)}"
         )
     
     cells = db.query(models.GridCell).options(
@@ -184,7 +192,7 @@ def get_cells_by_status(
     
     return cells
 
-@router.get("/cell/{cell_id}/detail", response_model=schemas.CellDetailResponse)
+@router.get("/grid/cell/{cell_id}/detail", response_model=schemas.CellDetailResponse)
 def get_cell_detail(
     cell_id: int,
     db: Session = Depends(get_db)
@@ -203,11 +211,11 @@ def get_cell_detail(
     if not cell:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy ô"
+            detail="Cell not found"
         )
     return cell
 
-@router.put("/cell/{cell_id}/status")
+@router.put("/grid/cell/{cell_id}/status")
 def update_cell_status(
     cell_id: int,
     status_update: schemas.CellStatusUpdate,
@@ -228,7 +236,7 @@ def update_cell_status(
     if not cell:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy ô"
+            detail="Cell not found"
         )
     
     # Validate status
@@ -236,7 +244,7 @@ def update_cell_status(
     if status_update.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Trạng thái không hợp lệ. Chỉ chấp nhận: {', '.join(valid_statuses)}"
+            detail=f"Invalid status. Only accepts: {', '.join(valid_statuses)}"
         )
     
     # Nếu đổi sang "empty" → Phải clear hết data (giống clear_cell)
@@ -245,12 +253,12 @@ def update_cell_status(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Không thể clear ô (ô đã trống hoặc lỗi hệ thống)"
+                detail="Cannot clear cell (cell is empty or system error)"
             )
         
         return {
             "success": True,
-            "message": f"Đã giải phóng ô {cell.cell_name} và chuyển sang trạng thái 'empty'. Lịch sử đã được lưu.",
+            "message": f"Released cell {cell.cell_name} and switched to 'empty' status. History has been saved.",
             "cell_id": cell_id,
             "cell_name": cell.cell_name,
             "new_status": "empty",
@@ -272,7 +280,7 @@ def update_cell_status(
         db=db,
         cell_id=cell_id,
         action_type="status_changed",
-        description=f"Ô {cell.cell_name} đổi từ '{old_status}' → '{status_update.status}' (thủ công)",
+        description=f"Cell {cell.cell_name} changed from '{old_status}' → '{status_update.status}' (manual)",
         order_code=cell.current_order_code,
         order_date=cell.current_order_date,
         old_data={"status": old_status},
@@ -284,7 +292,7 @@ def update_cell_status(
     
     return {
         "success": True,
-        "message": f"Đã cập nhật trạng thái ô {cell.cell_name} từ '{old_status}' thành '{status_update.status}'",
+        "message": f"Updated cell {cell.cell_name} status from '{old_status}' to '{status_update.status}'",
         "cell_id": cell_id,
         "cell_name": cell.cell_name,
         "old_status": old_status,
@@ -293,7 +301,7 @@ def update_cell_status(
         "data_cleared": False
     }
 
-@router.put("/cell/{cell_id}/note")
+@router.put("/grid/cell/{cell_id}/note")
 def update_cell_note(
     cell_id: int,
     note_update: schemas.CellNoteUpdate,
@@ -304,17 +312,17 @@ def update_cell_note(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy ô"
+            detail="Cell not found"
         )
     
     return {
         "success": True,
-        "message": "Đã cập nhật ghi chú cho ô",
+        "message": "Updated cell note",
         "cell_id": cell_id,
         "note": note_update.note
     }
 
-@router.post("/cell/{cell_id}/clear")
+@router.post("/grid/cell/{cell_id}/clear")
 def clear_cell(
     cell_id: int,
     db: Session = Depends(get_db)
@@ -330,27 +338,38 @@ def clear_cell(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Không thể giải phóng ô (ô trống hoặc lỗi hệ thống)"
+            detail="Cannot release cell (cell is empty or system error)"
         )
     
     return {
         "success": True,
-        "message": "Đã giải phóng ô và giao hàng thành công",
+        "message": "Successfully released cell and shipped products",
         "cell_id": cell_id
     }
 
-@router.get("/cell/{cell_id}/history", response_model=List[schemas.CellHistoryResponse])
+@router.get("/grid/cell/{cell_id}/history", response_model=schemas.PaginationResponse[schemas.CellHistoryResponse])
 def get_cell_history(
     cell_id: int,
+    page: int = 1,
+    limit: int = 10,
+    action_type: str = None,
+    order_code: str = None,
+    order_date: str = None,
     db: Session = Depends(get_db)
 ):
     """Lấy lịch sử của ô"""
-    histories = crud.get_cell_histories(db=db, cell_id=cell_id)
-    return histories
+    histories = crud.get_cell_histories(db=db, cell_id=cell_id, skip=(page - 1) * limit, limit=limit, action_type=action_type, order_code=order_code, order_date=order_date)
+    paginationData = schemas.PaginationResponse(
+        page=page,
+        limit=limit,
+        total=len(histories),
+        data=histories,
+    )
+    return paginationData
 
 # Order Tracking Endpoints
 
-@router.get("/order/{full_order_key}", response_model=schemas.OrderTrackingResponse)
+@router.get("/grid/order/{full_order_key}", response_model=schemas.OrderTrackingResponse)
 def get_order_status(
     full_order_key: str,
     db: Session = Depends(get_db)
@@ -366,16 +385,16 @@ def get_order_status(
     if not order:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy đơn hàng"
+            detail="Order not found"
         )
     
     return order
 
-@router.get("/orders/list", response_model=List[schemas.OrderTrackingResponse])
+@router.get("/grid/orders", response_model=schemas.PaginationResponse[schemas.OrderTrackingResponse])
 def get_all_orders(
     status_filter: str = None,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = 1,
+    limit: int = 10,
     db: Session = Depends(get_db)
 ):
     """
@@ -387,12 +406,18 @@ def get_all_orders(
     if status_filter:
         query = query.filter(models.OrderTracking.status == status_filter)
     
-    orders = query.order_by(models.OrderTracking.created_at.desc()).offset(skip).limit(limit).all()
-    return orders
+    orders = query.order_by(models.OrderTracking.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    paginationData = schemas.PaginationResponse(
+        page=page,
+        limit=limit,
+        total=len(orders),
+        data=orders,
+    )
+    return paginationData
 
 # Statistics Endpoints
 
-@router.get("/stats/summary")
+@router.get("/grid/status/summary")
 def get_system_summary(db: Session = Depends(get_db)):
     """Lấy thống kê tổng quan hệ thống"""
     

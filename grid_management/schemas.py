@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Optional, List, TypeVar, Generic
 from datetime import datetime
 
 # Product Input Schema (from FE)
@@ -182,3 +182,10 @@ class ApiResponse(BaseModel):
     success: bool
     message: str
     data: Optional[dict] = None
+
+T = TypeVar("T")
+class PaginationResponse(BaseModel, Generic[T]):
+    page: int
+    limit: int
+    total: int
+    data: List[T] = []
