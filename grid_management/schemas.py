@@ -1,0 +1,181 @@
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List
+from datetime import datetime
+
+# Product Input Schema (từ FE)
+class ProductInput(BaseModel):
+    productCode: str = Field(..., description="Mã sản phẩm: VA-M-000126-2")
+    size: str = Field(..., description="Kích thước")
+    color: str = Field(..., description="Màu sắc")
+    qrData: str = Field(..., description="Dữ liệu QR: 101725-VA-M-000126-2")
+    number: str = Field(..., description="Số thứ tự sản phẩm")
+    total: str = Field(..., description="Tổng số sản phẩm")
+
+# Grid Schemas
+class GridCreate(BaseModel):
+    name: str = Field(..., description="Tên lưới")
+    width: int = Field(..., gt=0, le=20, description="Chiều rộng lưới (1-20)")
+    height: int = Field(..., gt=0, le=20, description="Chiều cao lưới (1-20)")
+
+class GridUpdate(BaseModel):
+    name: Optional[str] = Field(None, description="Tên lưới mới")
+    width: Optional[int] = Field(None, gt=0, le=20, description="Chiều rộng mới (1-20)")
+    height: Optional[int] = Field(None, gt=0, le=20, description="Chiều cao mới (1-20)")
+
+class GridResponse(BaseModel):
+    id: int
+    name: str
+    width: int
+    height: int
+    total_cells: int
+    created_at: datetime
+    is_active: bool
+    
+    class Config:
+        from_attributes = True
+
+# Product Schemas
+class ProductResponse(BaseModel):
+    id: int
+    product_code: str
+    size: str
+    color: str
+    qr_data: str
+    number: int
+    total: int
+    production_area: str
+    size_code: str
+    order_number: str
+    product_number: int
+    order_date: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Cell Schemas
+class GridCellResponse(BaseModel):
+    id: int
+    position_x: int
+    position_y: int
+    cell_name: str
+    current_order_code: Optional[str]
+    current_order_date: Optional[str]
+    current_full_order_key: Optional[str]
+    current_product_count: int
+    target_product_count: Optional[int]
+    status: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    filled_at: Optional[datetime]
+    cleared_at: Optional[datetime]
+    products: List[ProductResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+class GridWithCellsResponse(BaseModel):
+    id: int
+    name: str
+    width: int
+    height: int
+    total_cells: int
+    created_at: datetime
+    is_active: bool
+    cells: List[GridCellResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+# Cell Update Schemas
+class CellNoteUpdate(BaseModel):
+    note: Optional[str] = Field(None, description="Ghi chú cho ô")
+
+class CellStatusUpdate(BaseModel):
+    status: str = Field(..., description="Trạng thái: empty, filling, full")
+
+# Order Tracking Schemas
+class OrderTrackingResponse(BaseModel):
+    id: int
+    order_code: str
+    order_date: str
+    full_order_key: str
+    total_products: int
+    received_products: int
+    assigned_cell_id: Optional[int]
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime]
+    shipped_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+# Cell History Schemas
+class CellHistoryResponse(BaseModel):
+    id: int
+    order_code: str
+    product_count: int
+    started_at: datetime
+    completed_at: datetime
+    cleared_at: datetime
+    note_at_completion: Optional[str]
+    products_data: str
+    
+    class Config:
+        from_attributes = True
+
+# Cell Detail with History and Products
+class CellDetailResponse(BaseModel):
+    id: int
+    position_x: int
+    position_y: int
+    cell_name: str
+    current_order_code: Optional[str]
+    current_order_date: Optional[str]
+    current_full_order_key: Optional[str]
+    current_product_count: int
+    target_product_count: Optional[int]
+    status: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    filled_at: Optional[datetime]
+    cleared_at: Optional[datetime]
+    products: List[ProductResponse] = []
+    histories: List[CellHistoryResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+# API Response Schemas
+class ProductAssignmentResponse(BaseModel):
+    success: bool
+    message: str
+    grid_id: Optional[int] = None
+    grid_name: Optional[str] = None
+    cell_id: Optional[int] = None
+    cell_name: Optional[str] = None
+    cell_position: Optional[str] = None
+    order_code: Optional[str] = None
+    current_count: Optional[int] = None
+    target_count: Optional[int] = None
+    cell_status: Optional[str] = None
+    product_info: Optional[dict] = None
+    duplicate: Optional[bool] = False
+
+class GridStatusResponse(BaseModel):
+    grid_id: int
+    grid_name: str
+    total_cells: int
+    empty_cells: int
+    filling_cells: int
+    full_cells: int
+    cells: List[GridCellResponse]
+
+class ApiResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
