@@ -92,25 +92,38 @@ class Product(Base):
 
 class CellHistory(Base):
     """
-    Bảng lưu lịch sử của từng ô - mỗi lần ô được đầy và giải phóng
+    Bảng lưu TẤT CẢ lịch sử hoạt động của ô
+    - Thêm sản phẩm
+    - Đổi trạng thái
+    - Cập nhật ghi chú
+    - Giải phóng ô
     """
     __tablename__ = "cell_histories"
     
     id = Column(Integer, primary_key=True, index=True)
     cell_id = Column(Integer, ForeignKey("grid_cells.id"), nullable=False)
     
-    # Thông tin đơn hàng đã hoàn thành
-    order_code = Column(String(100), nullable=False, comment="Mã đơn hàng đã hoàn thành")
-    product_count = Column(Integer, nullable=False, comment="Số sản phẩm đã hoàn thành")
-    products_data = Column(Text, nullable=False, comment="JSON data của tất cả sản phẩm")
+    # Loại hành động
+    action_type = Column(String(50), nullable=False, comment="Loại: product_added, status_changed, note_updated, cell_cleared")
+    description = Column(Text, nullable=False, comment="Mô tả chi tiết")
     
-    # Thông tin thời gian
-    started_at = Column(DateTime, nullable=False, comment="Thời gian bắt đầu nhận đơn hàng")
-    completed_at = Column(DateTime, nullable=False, comment="Thời gian hoàn thành đơn hàng")
-    cleared_at = Column(DateTime, default=datetime.utcnow, comment="Thời gian giải phóng ô")
+    # Thông tin đơn hàng (nếu có)
+    order_code = Column(String(100), nullable=True, comment="Mã đơn hàng liên quan")
+    order_date = Column(String(10), nullable=True, comment="Ngày đơn hàng")
     
-    # Ghi chú tại thời điểm hoàn thành
-    note_at_completion = Column(Text, nullable=True, comment="Ghi chú khi hoàn thành")
+    # Dữ liệu cũ và mới (JSON)
+    old_data = Column(Text, nullable=True, comment="Dữ liệu trước khi thay đổi (JSON)")
+    new_data = Column(Text, nullable=True, comment="Dữ liệu sau khi thay đổi (JSON)")
+    
+    # Thông tin thêm cho action cell_cleared
+    products_data = Column(Text, nullable=True, comment="JSON data của sản phẩm khi clear")
+    product_count = Column(Integer, nullable=True, comment="Số sản phẩm khi clear")
+    
+    # Người thực hiện
+    performed_by = Column(String(100), default="system", comment="Người thực hiện")
+    
+    # Thời gian
+    created_at = Column(DateTime, default=datetime.utcnow, comment="Thời gian thực hiện")
     
     # Relationships
     cell = relationship("GridCell", back_populates="histories")
@@ -138,31 +151,3 @@ class OrderTracking(Base):
     
     # Relationships
     assigned_cell = relationship("GridCell", back_populates="order_tracking")
-
-class CellActivityLog(Base):
-    """
-    Bảng ghi lại TẤT CẢ hoạt động trên ô
-    - Thêm sản phẩm
-    - Đổi trạng thái
-    - Update ghi chú
-    - Giải phóng ô
-    """
-    __tablename__ = "cell_activity_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    cell_id = Column(Integer, ForeignKey("grid_cells.id"), nullable=False)
-    
-    action = Column(String(50), nullable=False, comment="Hành động: product_added, status_changed, note_updated, cell_cleared")
-    description = Column(Text, nullable=False, comment="Mô tả chi tiết hành động")
-    
-    # Thông tin trước và sau
-    old_value = Column(Text, nullable=True, comment="Giá trị cũ (JSON)")
-    new_value = Column(Text, nullable=True, comment="Giá trị mới (JSON)")
-    
-    # Thông tin người thực hiện (nếu có auth)
-    performed_by = Column(String(100), nullable=True, comment="Người thực hiện (user_id hoặc 'system')")
-    
-    created_at = Column(DateTime, default=datetime.utcnow, comment="Thời gian thực hiện")
-    
-    # Relationships
-    cell = relationship("GridCell", backref="activity_logs")

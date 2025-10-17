@@ -116,13 +116,16 @@ class OrderTrackingResponse(BaseModel):
 # Cell History Schemas
 class CellHistoryResponse(BaseModel):
     id: int
-    order_code: str
-    product_count: int
-    started_at: datetime
-    completed_at: datetime
-    cleared_at: datetime
-    note_at_completion: Optional[str]
-    products_data: str
+    action_type: str
+    description: str
+    order_code: Optional[str]
+    order_date: Optional[str]
+    old_data: Optional[str]
+    new_data: Optional[str]
+    products_data: Optional[str]
+    product_count: Optional[int]
+    performed_by: Optional[str]
+    created_at: datetime
     
     class Config:
         from_attributes = True

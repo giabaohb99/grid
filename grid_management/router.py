@@ -267,6 +267,18 @@ def update_cell_status(
         from datetime import datetime
         cell.filled_at = datetime.utcnow()
     
+    # Log: Đổi status thủ công
+    crud.log_cell_history(
+        db=db,
+        cell_id=cell_id,
+        action_type="status_changed",
+        description=f"Ô {cell.cell_name} đổi từ '{old_status}' → '{status_update.status}' (thủ công)",
+        order_code=cell.current_order_code,
+        order_date=cell.current_order_date,
+        old_data={"status": old_status},
+        new_data={"status": status_update.status, "filled_at": cell.filled_at.isoformat() if cell.filled_at else None}
+    )
+    
     db.commit()
     db.refresh(cell)
     

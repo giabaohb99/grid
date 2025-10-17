@@ -48,6 +48,43 @@ def create_full_order_key(order_code: str, order_date: str) -> str:
     """
     return f"{order_code}-{order_date}"
 
+def log_cell_history(
+    db: Session,
+    cell_id: int,
+    action_type: str,
+    description: str,
+    order_code: str = None,
+    order_date: str = None,
+    old_data: dict = None,
+    new_data: dict = None,
+    products_data: str = None,
+    product_count: int = None,
+    performed_by: str = "system"
+):
+    """
+    Ghi lại MỌI hoạt động vào cell_histories
+    
+    action_type:
+    - product_added: Thêm sản phẩm
+    - status_changed: Đổi trạng thái
+    - note_updated: Cập nhật ghi chú
+    - cell_cleared: Giải phóng ô (giao hàng)
+    """
+    history = models.CellHistory(
+        cell_id=cell_id,
+        action_type=action_type,
+        description=description,
+        order_code=order_code,
+        order_date=order_date,
+        old_data=json.dumps(old_data, ensure_ascii=False) if old_data else None,
+        new_data=json.dumps(new_data, ensure_ascii=False) if new_data else None,
+        products_data=products_data,
+        product_count=product_count,
+        performed_by=performed_by
+    )
+    db.add(history)
+    # Không commit ở đây - transaction chính sẽ commit
+
 # Grid CRUD
 def create_grid(db: Session, grid: schemas.GridCreate) -> models.Grid:
     """Tạo lưới mới và tự động tạo các ô"""
@@ -254,6 +291,10 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
         
         db.add(new_product)
         
+        # Lưu status cũ để log
+        old_status = target_cell.status
+        old_count = target_cell.current_product_count or 0
+        
         # Cập nhật thông tin ô
         target_cell.current_order_code = order_code
         target_cell.current_order_date = order_date
@@ -268,6 +309,36 @@ def assign_product_to_cell(db: Session, product_input: schemas.ProductInput) -> 
             target_cell.filled_at = datetime.utcnow()
         else:
             target_cell.status = "filling"
+        
+        # Log: Thêm sản phẩm
+        log_cell_history(
+            db=db,
+            cell_id=target_cell.id,
+            action_type="product_added",
+            description=f"Thêm sản phẩm {product_input.productCode} ({product_input.size}/{product_input.color}) vào ô {target_cell.cell_name}",
+            order_code=order_code,
+            order_date=order_date,
+            new_data={
+                "product_code": product_input.productCode,
+                "size": product_input.size,
+                "color": product_input.color,
+                "current_count": target_cell.current_product_count,
+                "target_count": target_cell.target_product_count
+            }
+        )
+        
+        # Log: Đổi status (nếu thay đổi)
+        if old_status != target_cell.status:
+            log_cell_history(
+                db=db,
+                cell_id=target_cell.id,
+                action_type="status_changed",
+                description=f"Ô {target_cell.cell_name} đổi từ '{old_status}' → '{target_cell.status}' (tự động)",
+                order_code=order_code,
+                order_date=order_date,
+                old_data={"status": old_status, "count": old_count},
+                new_data={"status": target_cell.status, "count": target_cell.current_product_count, "filled_at": target_cell.filled_at.isoformat() if target_cell.filled_at else None}
+            )
         
         # Cập nhật/tạo order tracking
         order_tracking = db.query(models.OrderTracking).filter(
@@ -330,8 +401,22 @@ def update_cell_note(db: Session, cell_id: int, note: Optional[str]) -> bool:
     if not cell:
         return False
     
+    old_note = cell.note
     cell.note = note
     cell.updated_at = datetime.utcnow()
+    
+    # Log: Update note
+    log_cell_history(
+        db=db,
+        cell_id=cell_id,
+        action_type="note_updated",
+        description=f"Cập nhật ghi chú cho ô {cell.cell_name}",
+        order_code=cell.current_order_code,
+        order_date=cell.current_order_date,
+        old_data={"note": old_note},
+        new_data={"note": note}
+    )
+    
     db.commit()
     return True
 
@@ -361,16 +446,28 @@ def clear_cell(db: Session, cell_id: int) -> bool:
                     "created_at": product.created_at.isoformat()
                 })
             
-            history = models.CellHistory(
+            # Log: Clear cell (giao hàng)
+            log_cell_history(
+                db=db,
                 cell_id=cell_id,
-                order_code=cell.current_order_code or cell.current_full_order_key or "Unknown",
-                product_count=cell.current_product_count or len(products),
+                action_type="cell_cleared",
+                description=f"Giải phóng ô {cell.cell_name} - Giao đơn hàng {cell.current_order_code}",
+                order_code=cell.current_order_code,
+                order_date=cell.current_order_date,
+                old_data={
+                    "status": cell.status,
+                    "order_code": cell.current_order_code,
+                    "product_count": cell.current_product_count,
+                    "note": cell.note
+                },
+                new_data={
+                    "status": "empty",
+                    "order_code": None,
+                    "product_count": 0
+                },
                 products_data=json.dumps(products_data, ensure_ascii=False),
-                started_at=products[0].created_at,  # Thời gian sản phẩm đầu tiên
-                completed_at=cell.filled_at or datetime.utcnow(),
-                note_at_completion=cell.note
+                product_count=cell.current_product_count or len(products)
             )
-            db.add(history)
             
             # Xóa tất cả sản phẩm
             for product in products:
